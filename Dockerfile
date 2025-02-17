@@ -1,13 +1,12 @@
-# Use Ubuntu as the base image
+# Use Ubuntu 22.04 as base image
 FROM ubuntu:22.04
 
 # Set noninteractive mode for apt
 ENV DEBIAN_FRONTEND=noninteractive
 
-# Install necessary dependencies
+# Install dependencies
 RUN apt update && apt install -y \
     build-essential \
-    cmake \
     clang \
     lld \
     libc++-dev \
@@ -26,19 +25,20 @@ RUN apt update && apt install -y \
     sudo \
     && rm -rf /var/lib/apt/lists/*
 
-# Set working directory
-WORKDIR /usr/local
+# Remove outdated CMake (if installed)
+RUN apt remove -y cmake || true
 
-# Download and build Halide
-RUN git clone --recursive https://github.com/halide/Halide.git && \
-    cd Halide && \
-    mkdir build && cd build && \
-    cmake -DCMAKE_BUILD_TYPE=Release -G Ninja .. && \
-    ninja && ninja install
+# Install CMake 3.28+ from Kitware repository
+RUN wget -O - https://apt.kitware.com/keys/kitware-archive-latest.asc | gpg --dearmor -o /usr/share/keyrings/kitware-archive-keyring.gpg \
+    && echo 'deb [signed-by=/usr/share/keyrings/kitware-archive-keyring.gpg] https://apt.kitware.com/ubuntu/ jammy main' | tee /etc/apt/sources.list.d/kitware.list >/dev/null \
+    && apt update \
+    && apt install -y cmake
 
-# Set environment variables for Halide
-ENV PATH="/usr/local/Halide/bin:${PATH}"
-ENV LD_LIBRARY_PATH="/usr/local/Halide/lib:${LD_LIBRARY_PATH}"
+# Verify CMake version
+RUN cmake --version
+
+# Install Halide via pip
+RUN pip install halide --pre --extra-index-url https://test.pypi.org/simple
 
 # Set working directory for the project
 WORKDIR /workspace
