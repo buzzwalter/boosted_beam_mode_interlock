@@ -32,13 +32,30 @@ RUN apt remove -y cmake || true
 RUN wget -O - https://apt.kitware.com/keys/kitware-archive-latest.asc | gpg --dearmor -o /usr/share/keyrings/kitware-archive-keyring.gpg \
     && echo 'deb [signed-by=/usr/share/keyrings/kitware-archive-keyring.gpg] https://apt.kitware.com/ubuntu/ jammy main' | tee /etc/apt/sources.list.d/kitware.list >/dev/null \
     && apt update \
-    && apt install -y cmake
+    && apt install -y cmake \ 
+    && apt install libopencv-dev \
+    && apt install libfftw3-dev \ 
+    && apt install nano \
+    && apt install llvm-14 \ 
+    && apt install llvm-14-dev \ 
+    && apt install clang-14
 
 # Verify CMake version
 RUN cmake --version
 
-# Install Halide via pip
-RUN pip install halide --pre --extra-index-url https://test.pypi.org/simple
+# Install and link halide via 
+RUN wget https://github.com/halide/Halide/releases/download/v19.0.0/Halide-19.0.0-arm-64-linux-5f17d6f8a35e7d374ef2e7e6b2d90061c0530333.tar.gz \
+    && tar -xvzf Halide-19.0.0-arm-64-linux-5f17d6f8a35e7d374ef2e7e6b2d90061c0530333.tar.gz \
+    &&  mv Halide-19.0.0-arm-64-linux /usr/local/halide \
+    && ln -s /usr/local/halide/lib/libHalide.so /usr/local/lib/libHalide.so \ 
+    && echo 'export LD_LIBRARY_PATH=/usr/local/halide/lib:$LD_LIBRARY_PATH' >> ~/.bashrc \ 
+    && echo 'export CPLUS_INCLUDE_PATH=/usr/local/halide/include:$CPLUS_INCLUDE_PATH' >> ~/.bashrc \
+    && echo 'export PATH = /user/local/halide/bin:$PATH' >> ~/.bashrc \
+    && export LLVM_CONFIG = /usr/bin/llvm-config-14
+    && rm Halide-19.0.0-arm-64-linux-5f17d6f8a35e7d374ef2e7e6b2d90061c0530333.tar.gz
+
+# If you want debug output, run the following as well
+# RUN export HL_DEBUG = 1 && export HL_DEBUG_CODEGEN = 1
 
 # Set working directory for the project
 WORKDIR /workspace
