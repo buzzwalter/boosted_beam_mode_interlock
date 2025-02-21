@@ -1,10 +1,9 @@
 #include "fourier_spectrum.hpp"
 #include <vector>
 #include <string>
-#include <filesystem>
 #include <chrono>
 #include <thread>
-
+#include <sstream>
 
 int main() {
   // std::vector<std::string> image_paths = {
@@ -12,10 +11,16 @@ int main() {
   //   "./data/test_images/0150.tiff",
   //   "./data/test_images/0260.tiff"   
   // };
+
   std::vector<std::string> image_paths;
-  for (const auto& file : std::filesystem::directory_iterator("./data/test_images")){
+
+  // Loop through test_images
+  for (int i = 150; i < 256; i++){
     // std::cout << file.path().string() << std::endl;
-    image_paths.emplace_back(file.path().string());
+    std::ostringstream oss;
+    oss << "./data/test_images" << "/" << std::setw(4) << std::setfill('0') << i << ".tiff";
+    image_paths.push_back(oss.str());
+    // image_paths.emplace_back(std::format("{}{:04}{}","./data/test_images/",i,".tiff"));
   }
   
   //  std::cout << "no seggy here" << std::endl;

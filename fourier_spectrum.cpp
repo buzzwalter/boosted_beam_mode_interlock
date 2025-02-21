@@ -72,7 +72,7 @@ cv::Mat FourierSpectrum::computeSpectrum(const cv::Mat& img) {
     // magnitude += 1e-62;
     // cv::log(magnitude, magnitude);
     cv::normalize(magnitude, magnitude, 0, 255, cv::NORM_MINMAX);
-    magnitude.convertTo(magnitude, CV_8U);
+    //magnitude.convertTo(magnitude, CV_8U);
 
     // Cleanup
     fftw_destroy_plan(plan);
@@ -92,8 +92,11 @@ cv::Mat FourierSpectrum::createDistanceMatrix(int rows, int cols){
      }
    }
    
+   double max;
+   double min;
+   cv::minMaxLoc(distances, &min, &max);
    // Normalize distances
-   distances = distances / std::sqrt(center_x * center_x + center_y + center_y);
+   distances = distances / max;
 
    return distances;
 }
@@ -128,8 +131,10 @@ std::vector<double> FourierSpectrum::computeRadialProfile(const cv::Mat& magnitu
   
   // Build dsn. by calculating frequency
   for (int b = 0; b < num_bins; b++){
-    if(bin_counts[b] < 0){
+    if(bin_counts[b] > 0){
+      //      std::cout << radial_profile[b] << " " << bin_counts[b] << std::endl;
       radial_profile[b] = radial_profile[b] / bin_counts[b];
+
     }
   }
   
@@ -154,13 +159,14 @@ double FourierSpectrum::computeBroadness(const cv::Mat& spectrum) {
   cv::Mat magnitude_normalized;
   double max;
   double min;
-  cv::minMaxLoc(spectrum, &max, &min);
-  magnitude_normalized = (spectrum - min) / (max - min);
+  cv::minMaxLoc(spectrum, &min, &max);
+  magnitude_normalized =  (spectrum - min) / (max - min);
+  
+  //  std::cout << "min and max: " << min << " " << max << std::endl;
 
-  // std::cout << "no seggy here" << std::endl;
 
   // Compute the radial profile with bin number of 50 -- could try different bin numbers
-  int num_bins = 60;
+  int num_bins = 100;
   std::vector<double> radial_profile = computeRadialProfile(magnitude_normalized, distances_normalized, num_bins);
 
   // First calculate mean for std
@@ -180,7 +186,8 @@ void FourierSpectrum::processImages(const std::vector<std::string>& image_paths,
                                   const std::string& output_dir) {
     std::vector<cv::Mat> results(image_paths.size());
     std::vector<double> radial_stds(107, 0.0);
-    
+   
+    double radial_std;
     // Uncomment for parralelism 
     // #pragma omp parallel for
     for (size_t i = 0; i < image_paths.size(); ++i) {
@@ -191,8 +198,7 @@ void FourierSpectrum::processImages(const std::vector<std::string>& image_paths,
         }
 
         results[i] = computeSpectrum(img);
-        std::cout << "Processed image " << image_paths[i] << std::endl;
-	double radial_std;
+        std::cout << "Processed image " << i << "/" << image_paths.size() << std::endl;
 	radial_std = computeBroadness(results[i]);
 	radial_stds[i] = radial_std;
 	std::cout << radial_std << std::endl;
@@ -202,6 +208,7 @@ void FourierSpectrum::processImages(const std::vector<std::string>& image_paths,
     // Save results
     for (size_t i = 0; i < results.size(); ++i) {
         std::string output_name = output_dir + "/spectrum_" + std::to_string(i) + ".png";
+	results[i].convertTo(results[i],CV_8U);
         cv::imwrite(output_name, results[i]);
         std::cout << "Saved spectrum: " << output_name << std::endl;
     }
