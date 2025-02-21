@@ -1,6 +1,7 @@
 #include "fourier_spectrum.hpp"
 #include <fftw3.h>
 #include <iostream>
+#include <numeric>
 #include <omp.h>
 #include <cmath>
 
@@ -80,9 +81,99 @@ cv::Mat FourierSpectrum::computeSpectrum(const cv::Mat& img) {
     return magnitude;
 }
 
-// double FourierSpectrum::computeBroadness(const cv::Mat& spectrum) {
-//   return 0.0
-// }
+cv::Mat FourierSpectrum::createDistanceMatrix(int rows, int cols){
+   cv::Mat distances(rows,columns,CV_64F);
+   int center_y = std::ceil(rows/2);
+   int center_x = std::ceil(cols/2); 
+   for (int i = 0; i < rows; i++){
+     for (int j = 0; j < cols: j++) {
+       distances.at<double>(i.j) = std::sqrt((x-center_x) * (x-center_x) + (y-center_y) * (y-center_y));
+     }
+   }
+   return distances;
+}
+
+std::vector<double> FourierSpectrum::computeRadialProfile(const cv::Mat& magnitude, const cv::Mat& distances, int num_bins){
+
+  std::vector<double> radial_profile(num_bins, 0.0);
+  std::vector<int> bin_counts(num_bins, 0);
+
+  // Set bin edge distances (remember that they're normalized)
+  std::vector<double> bin_edges(num_bins + 1);
+  for (int i = 0; i <= num_bins, i++){
+    bin_edges[i] = static_cast<double>(i) / num_bins;
+  }
+
+  // Populate buckets
+  for (int i = 0; i < distances.rows, i++){
+    for (int j = 0; j < distances.cols, j++){
+      double dist = distances_normalized.at<double>(i,j);
+      double mag = magnitude.at<double>(i,j);
+      
+      // Find the bin and break loop to save unnecessary jumps
+      for (int b = 0; b < num_bins; b++){
+	if (dist >= bin_edges[b] && dist <= bin_edges[b+1]){
+	  radial_profile[b] += mag;
+	  bin_counts[b]++;
+	  break;
+	}
+      }
+    }
+  }
+  
+  // Build dsn. by calculating frequency
+  for (int b = 0; b < num_bins; b++){
+    if(bin_counts[b] < 0){
+      radial_profile[b] = radial_profile[bin] / bin_counts[b];
+    }
+  }
+  
+  // Clean it up just in case there are NaN values -- might remove or comment out
+  std::vector<double> cleaned_profile;
+  for (int b = 0; b < num_bins; b++){
+    if (bin_counts[b] >= 0){
+      cleaned_profile.emplace_back(radial_profile[b]);
+    }
+  }
+  
+  return cleaned_profile;
+}
+
+
+double FourierSpectrum::computeBroadness(const cv::Mat& spectrum) {
+
+  // Create distance matrix
+  cv::Mat distances = createDistanceMatrix(spectrum.rows, spectrum.cols);
+
+  // Normalize matrices
+  cv::Mat magnitude_normalized;
+  cv::Mat distances_normalized;
+
+  double max;
+  double min;
+  cv::minMaxLoc(spectrum, &max, &min);
+  magnitude_normalized = (spectrum - min) / (max - min);
+  
+  // Normalize based on knowledge that maximum pixel distances is fixed by pixel array
+  max = std::sqrt(spectrum.rows * spectrum.rows + spectrum.cols * spectrum.cols);
+  distances_normalized = distances / max;
+
+  // Compute the radial profile with bin number of 50 -- could try different bin numbers
+  int num_bins = 50;
+  std::vector<double> radial_profile = computeRadialProfile(magnitude_normalized, distances_normalized, num_bins);
+  
+  // First calculate mean for std
+  double sum = std::accumulate(radial_profile.begin(),radial_profile.end(),0.0);
+  double mean = sum / radial_profile.size();
+
+  // Calculate std
+  double sq_sum = std::accumulate(radial_profile.begin(), radial_profile.end(), 0.0, [mean](double acc, double val) {
+    return acc + (val - mean) * (val - mean);
+  });
+  double radial_std = std::sqrt(sq_sum) / (radial_profile.size() - 1); // could replace with bin_size if certain no NaN values can appear
+  
+  return radial_std;
+}
 
 void FourierSpectrum::processImages(const std::vector<std::string>& image_paths, 
                                   const std::string& output_dir) {
