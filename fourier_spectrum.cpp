@@ -119,13 +119,21 @@ std::vector<double> FourierSpectrum::computeRadialProfile(const cv::Mat& magnitu
       double mag = magnitude.at<double>(i,j);
       
       // Find the bin and break loop to save unnecessary jumps
-      for (int b = 0; b < num_bins; b++){
-	if (dist >= bin_edges[b] && dist <= bin_edges[b+1]){
-	  radial_profile[b] += mag;
-	  bin_counts[b]++;
-	  break;
-	}
+      // for (int b = 0; b < num_bins; b++){
+      // 	if (dist >= bin_edges[b] && dist <= bin_edges[b+1]){
+      // 	  radial_profile[b] += mag;
+      // 	  bin_counts[b]++;
+      // 	  break;
+      // 	}
+      // }
+      int bin_index = std::lower_bound(bin_edges.begin(), bin_edges.end(), dist) - bin_edges.begin() - 1;
+
+      // Ensure bin index is valid
+      if (bin_index >= 0 && bin_index < num_bins) {
+	radial_profile[bin_index] += mag;
+	bin_counts[bin_index]++;
       }
+
     }
   }
   
@@ -204,7 +212,7 @@ void FourierSpectrum::processImages(const std::vector<std::string>& image_paths,
 	std::cout << radial_std << std::endl;
 	
     }
-
+    
     // Save results
     for (size_t i = 0; i < results.size(); ++i) {
         std::string output_name = output_dir + "/spectrum_" + std::to_string(i) + ".png";
