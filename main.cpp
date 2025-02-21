@@ -19,7 +19,7 @@ int main() {
   }
   
   //  std::cout << "no seggy here" << std::endl;
-  std::this_thread::sleep_for(std::chrono::milliseconds(10));  // Introduce a short delay
+  std::this_thread::sleep_for(std::chrono::milliseconds(30));  // Introduce a short delay
 
 
   FourierSpectrum::processImages(image_paths);

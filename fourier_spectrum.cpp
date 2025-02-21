@@ -4,6 +4,7 @@
 #include <numeric>
 #include <omp.h>
 #include <cmath>
+#include <fstream>
 
 void FourierSpectrum::dftShift(cv::Mat& magnitude) {
     int cx = magnitude.cols / 2;
@@ -83,13 +84,17 @@ cv::Mat FourierSpectrum::computeSpectrum(const cv::Mat& img) {
 
 cv::Mat FourierSpectrum::createDistanceMatrix(int rows, int cols){
    cv::Mat distances(rows,cols,CV_64F);
-   int center_y = std::ceil(rows/2);
-   int center_x = std::ceil(cols/2); 
+   int center_y = rows / 2;
+   int center_x = cols / 2; 
    for (int i = 0; i < rows; i++){
      for (int j = 0; j < cols; j++) {
        distances.at<double>(i,j) = std::sqrt((j-center_x) * (j-center_x) + (i-center_y) * (i-center_y));
      }
    }
+   
+   // Normalize distances
+   distances = distances / std::sqrt(center_x * center_x + center_y + center_y);
+
    return distances;
 }
 
@@ -143,25 +148,19 @@ std::vector<double> FourierSpectrum::computeRadialProfile(const cv::Mat& magnitu
 double FourierSpectrum::computeBroadness(const cv::Mat& spectrum) {
 
   // Create distance matrix
-  cv::Mat distances = createDistanceMatrix(spectrum.rows, spectrum.cols);
-
-  // Normalize matrices
+  cv::Mat distances_normalized = createDistanceMatrix(spectrum.rows, spectrum.cols);
+  
+  // Normalize magnitude
   cv::Mat magnitude_normalized;
-  cv::Mat distances_normalized;
-
   double max;
   double min;
   cv::minMaxLoc(spectrum, &max, &min);
   magnitude_normalized = (spectrum - min) / (max - min);
-  
-  // Normalize based on knowledge that maximum pixel distances is fixed by pixel array
-  max = std::sqrt(spectrum.rows * spectrum.rows + spectrum.cols * spectrum.cols);
-  distances_normalized = distances / max;
 
   // std::cout << "no seggy here" << std::endl;
 
   // Compute the radial profile with bin number of 50 -- could try different bin numbers
-  int num_bins = 50;
+  int num_bins = 60;
   std::vector<double> radial_profile = computeRadialProfile(magnitude_normalized, distances_normalized, num_bins);
 
   // First calculate mean for std
@@ -180,8 +179,10 @@ double FourierSpectrum::computeBroadness(const cv::Mat& spectrum) {
 void FourierSpectrum::processImages(const std::vector<std::string>& image_paths, 
                                   const std::string& output_dir) {
     std::vector<cv::Mat> results(image_paths.size());
-
-    #pragma omp parallel for
+    std::vector<double> radial_stds(107, 0.0);
+    
+    // Uncomment for parralelism 
+    // #pragma omp parallel for
     for (size_t i = 0; i < image_paths.size(); ++i) {
         cv::Mat img = cv::imread(image_paths[i], cv::IMREAD_UNCHANGED);
         if (img.empty()) {
@@ -190,7 +191,12 @@ void FourierSpectrum::processImages(const std::vector<std::string>& image_paths,
         }
 
         results[i] = computeSpectrum(img);
-        std::cout << "Processed image " << i + 1 << "/" << image_paths.size() << std::endl;
+        std::cout << "Processed image " << image_paths[i] << std::endl;
+	double radial_std;
+	radial_std = computeBroadness(results[i]);
+	radial_stds[i] = radial_std;
+	std::cout << radial_std << std::endl;
+	
     }
 
     // Save results
@@ -199,5 +205,24 @@ void FourierSpectrum::processImages(const std::vector<std::string>& image_paths,
         cv::imwrite(output_name, results[i]);
         std::cout << "Saved spectrum: " << output_name << std::endl;
     }
+
+    // Open the file in output mode (create or overwrite)
+    std::ofstream out_file("./data/radial_stds.txt");
+
+    // Check if the file was opened successfully
+    if (!out_file) {
+        std::cerr << "Error opening file for writing!" << std::endl;
+    }
+
+    // Write the vector to the file (one number per line, or space-separated)
+    for (int i = 0; i < image_paths.size(); i++) {
+        out_file << image_paths[i] << " " << radial_stds[i]  << "\n";  // Write each value on a new line
+        // Alternatively, use: out_file << val << " ";  // Space-separated
+    }
+
+    // Close the file
+    out_file.close();
+
+    std::cout << "Data written to ./data/radial_stds.txt" << std::endl;
 }
 
