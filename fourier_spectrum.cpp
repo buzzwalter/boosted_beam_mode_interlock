@@ -82,12 +82,12 @@ cv::Mat FourierSpectrum::computeSpectrum(const cv::Mat& img) {
 }
 
 cv::Mat FourierSpectrum::createDistanceMatrix(int rows, int cols){
-   cv::Mat distances(rows,columns,CV_64F);
+   cv::Mat distances(rows,cols,CV_64F);
    int center_y = std::ceil(rows/2);
    int center_x = std::ceil(cols/2); 
    for (int i = 0; i < rows; i++){
-     for (int j = 0; j < cols: j++) {
-       distances.at<double>(i.j) = std::sqrt((x-center_x) * (x-center_x) + (y-center_y) * (y-center_y));
+     for (int j = 0; j < cols; j++) {
+       distances.at<double>(i,j) = std::sqrt((j-center_x) * (j-center_x) + (i-center_y) * (i-center_y));
      }
    }
    return distances;
@@ -100,14 +100,14 @@ std::vector<double> FourierSpectrum::computeRadialProfile(const cv::Mat& magnitu
 
   // Set bin edge distances (remember that they're normalized)
   std::vector<double> bin_edges(num_bins + 1);
-  for (int i = 0; i <= num_bins, i++){
+  for (int i = 0; i <= num_bins; i++){
     bin_edges[i] = static_cast<double>(i) / num_bins;
   }
 
   // Populate buckets
-  for (int i = 0; i < distances.rows, i++){
-    for (int j = 0; j < distances.cols, j++){
-      double dist = distances_normalized.at<double>(i,j);
+  for (int i = 0; i < distances.rows; i++){
+    for (int j = 0; j < distances.cols; j++){
+      double dist = distances.at<double>(i,j);
       double mag = magnitude.at<double>(i,j);
       
       // Find the bin and break loop to save unnecessary jumps
@@ -124,7 +124,7 @@ std::vector<double> FourierSpectrum::computeRadialProfile(const cv::Mat& magnitu
   // Build dsn. by calculating frequency
   for (int b = 0; b < num_bins; b++){
     if(bin_counts[b] < 0){
-      radial_profile[b] = radial_profile[bin] / bin_counts[b];
+      radial_profile[b] = radial_profile[b] / bin_counts[b];
     }
   }
   
@@ -158,10 +158,12 @@ double FourierSpectrum::computeBroadness(const cv::Mat& spectrum) {
   max = std::sqrt(spectrum.rows * spectrum.rows + spectrum.cols * spectrum.cols);
   distances_normalized = distances / max;
 
+  // std::cout << "no seggy here" << std::endl;
+
   // Compute the radial profile with bin number of 50 -- could try different bin numbers
   int num_bins = 50;
   std::vector<double> radial_profile = computeRadialProfile(magnitude_normalized, distances_normalized, num_bins);
-  
+
   // First calculate mean for std
   double sum = std::accumulate(radial_profile.begin(),radial_profile.end(),0.0);
   double mean = sum / radial_profile.size();

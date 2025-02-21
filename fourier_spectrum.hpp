@@ -15,7 +15,7 @@ public:
 private:
     static void dftShift(cv::Mat& magnitude);
     static cv::Mat createDistanceMatrix(int rows, int cols);
-    static vector<double> computerRadialProfile(const cv::Mat& magnitude, const cv::Mat& distances, int num_bins);
+    static std::vector<double> computeRadialProfile(const cv::Mat& magnitude, const cv::Mat& distances, int num_bins);
 };
 
 #endif // FOURIER_SPECTRUM_HPP
