@@ -158,7 +158,7 @@ std::vector<double> FourierSpectrum::computeRadialProfile(const cv::Mat& magnitu
 }
 
 
-double FourierSpectrum::computeBroadness(const cv::Mat& spectrum) {
+double FourierSpectrum::computeBroadness(const cv::Mat& spectrum, int num_bins) {
 
   // Create distance matrix
   cv::Mat distances_normalized = createDistanceMatrix(spectrum.rows, spectrum.cols);
@@ -174,7 +174,7 @@ double FourierSpectrum::computeBroadness(const cv::Mat& spectrum) {
 
 
   // Compute the radial profile with bin number of 50 -- could try different bin numbers
-  int num_bins = 100;
+  //int num_bins = 5000;
   std::vector<double> radial_profile = computeRadialProfile(magnitude_normalized, distances_normalized, num_bins);
 
   // First calculate mean for std
@@ -185,7 +185,7 @@ double FourierSpectrum::computeBroadness(const cv::Mat& spectrum) {
   double sq_sum = std::accumulate(radial_profile.begin(), radial_profile.end(), 0.0, [mean](double acc, double val) {
     return acc + (val - mean) * (val - mean);
   });
-  double radial_std = std::sqrt(sq_sum) / (radial_profile.size() - 1); // could replace with bin_size if certain no NaN values can appear
+  double radial_std = std::sqrt(sq_sum / (radial_profile.size() - 1)); // could replace with bin_size if certain no NaN values can appear
   
   return radial_std;
 }
@@ -206,8 +206,8 @@ void FourierSpectrum::processImages(const std::vector<std::string>& image_paths,
         }
 
         results[i] = computeSpectrum(img);
-        std::cout << "Processed image " << i << "/" << image_paths.size() << std::endl;
-	radial_std = computeBroadness(results[i]);
+        std::cout << "Processed image " << i << "/" << image_paths.size() - 1 << std::endl;
+	radial_std = computeBroadness(results[i], 5000);  // 5000 seems to be good enough
 	radial_stds[i] = radial_std;
 	std::cout << radial_std << std::endl;
 	
@@ -241,3 +241,65 @@ void FourierSpectrum::processImages(const std::vector<std::string>& image_paths,
     std::cout << "Data written to ./data/radial_stds.txt" << std::endl;
 }
 
+
+void FourierSpectrum::binningAnalysis(const std::vector<std::string>& image_paths, 
+				      int bin_minimum, int bin_maximum, const std::string& output_dir) {
+    std::vector<cv::Mat> results(image_paths.size());
+    std::vector<double> radial_stds(30, 0.0);
+
+    std::vector<double> bin_results((bin_maximum - bin_minimum), 0.0);
+
+    
+    double radial_std;
+    // Uncomment for parralelism 
+    // #pragma omp parallel for
+    for (int b = bin_minimum; b < bin_maximum; b++){
+      std::cout << "Processing bin: " << b << std::endl;
+      for (size_t i = 0; i < image_paths.size(); ++i) {
+	cv::Mat img = cv::imread(image_paths[i], cv::IMREAD_UNCHANGED);
+	if (img.empty()) {
+	  std::cerr << "Failed to load image: " << image_paths[i] << std::endl;
+	  continue;
+	}
+
+	results[i] = computeSpectrum(img);
+	//std::cout << "Processed image " << i << "/" << image_paths.size() - 1 << std::endl;
+	radial_std = computeBroadness(results[i], b);
+	radial_stds[i] = radial_std;
+	// std::cout << radial_std << std::endl;
+      }
+
+        double sum = std::accumulate(radial_stds.begin(),radial_stds.end(),0.0);
+	double mean = sum / radial_stds.size();
+
+
+	// Calculate std
+	double sq_sum = std::accumulate(radial_stds.begin(), radial_stds.end(), 0.0, [mean](double acc, double val) {
+	  return acc + (val - mean) * (val - mean);
+	});
+	double standard_deviation = std::sqrt(sq_sum / (radial_stds.size() - 1)); // could replace with bin_size if certain no NaN values can appear
+
+	// int store_index = (b - bin_minimum) / 2; 
+	bin_results[b - bin_minimum] = standard_deviation / mean;
+	std::cout << "standard_deviation: " << 	bin_results[b - bin_minimum] << std::endl;
+    }
+    
+    // Open the file in output mode (create or overwrite)
+    std::ofstream out_file("./data/binning_results.txt");
+
+    // Check if the file was opened successfully
+    if (!out_file) {
+        std::cerr << "Error opening file for writing!" << std::endl;
+    }
+
+    // Write the vector to the file (one number per line, or space-separated)
+    for (int i = 0; i < bin_results.size(); i++) {
+        out_file << bin_results[i]  << "\n";  // Write each value on a new line
+        // Alternatively, use: out_file << val << " ";  // Space-separated
+    }
+
+    // Close the file
+    out_file.close();
+
+    std::cout << "Data written to ./data/binning_results.txt" << std::endl;
+}

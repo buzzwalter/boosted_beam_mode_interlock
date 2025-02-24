@@ -9,8 +9,9 @@ class FourierSpectrum {
 public:
     // Main processing functions
     static cv::Mat computeSpectrum(const cv::Mat& img);
-    static void processImages(const std::vector<std::string>& image_paths, const std::string& output_dir = "./data");    
-    static double computeBroadness(const cv::Mat& spectrum);
+    static void processImages(const std::vector<std::string>& image_paths, const std::string& output_dir = "./data");
+  static void binningAnalysis(const std::vector<std::string>& image_paths, int bin_minimum, int bin_maximum,  const std::string& output_dir = "./data");
+    static double computeBroadness(const cv::Mat& spectrum, int num_bins);
 
 private:
     static void dftShift(cv::Mat& magnitude);

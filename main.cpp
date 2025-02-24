@@ -15,7 +15,7 @@ int main() {
   std::vector<std::string> image_paths;
 
   // Loop through test_images
-  for (int i = 150; i < 256; i++){
+  for (int i = 50; i < 80; i++){
     // std::cout << file.path().string() << std::endl;
     std::ostringstream oss;
     oss << "./data/test_images" << "/" << std::setw(4) << std::setfill('0') << i << ".tiff";
@@ -27,6 +27,7 @@ int main() {
   std::this_thread::sleep_for(std::chrono::milliseconds(30));  // Introduce a short delay
 
 
-  FourierSpectrum::processImages(image_paths);
+  // FourierSpectrum::processImages(image_paths);
+  FourierSpectrum::binningAnalysis(image_paths, 30, 380);
   return 0;
 }
