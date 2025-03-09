@@ -24,14 +24,14 @@ int main()
     std::cout << "Found " << devices.size() << " camera(s):" << std::endl;
     std::cout << "=========================" << std::endl;
 
-    // for (size_t i = 0; i < devices.size(); i++) {
-    //   std::cout << "Camera " << i << ":" << std::endl;
-    //   std::cout << "  Device Model: " << devices[i].GetModelName() << std::endl;
-    //   std::cout << "  Serial Number: " << devices[i].GetSerialNumber() << std::endl;
-    //   std::cout << "  Device Vendor: " << devices[i].GetVendorName() << std::endl;
-    //   std::cout << "  Device Type: " << devices[i].GetDeviceClass() << std::endl;
-    //   std::cout << "------------------------" << std::endl;
-    // }
+    for (size_t i = 0; i < devices.size(); i++) {
+      std::cout << "Camera " << i << ":" << std::endl;
+      std::cout << "  Device Model: " << devices[i].GetModelName() << std::endl;
+      std::cout << "  Serial Number: " << devices[i].GetSerialNumber() << std::endl;
+      std::cout << "  Device Vendor: " << devices[i].GetVendorName() << std::endl;
+      std::cout << "  Device Type: " << devices[i].GetDeviceClass() << std::endl;
+      std::cout << "------------------------" << std::endl;
+    }
 
     // Create a camera object for the first available camera
     Pylon::CInstantCamera camera(tlFactory.CreateDevice(devices[0]));
@@ -44,7 +44,7 @@ int main()
       std::cout << "Camera open successful!" << std::endl;
 
       // Optional: Try to access some camera parameters
-      std::cout << "Camera information:" << std::endl;
+      // std::cout << "Camera information:" << std::endl;
       //      std::cout << "  Width: " << camera.Width.GetValue() << std::endl;
       //      std::cout << "  Height: " << camera.Height.GetValue() << std::endl;
 

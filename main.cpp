@@ -28,6 +28,6 @@ int main() {
 
 
   // FourierSpectrum::processImages(image_paths);
-  FourierSpectrum::binningAnalysis(image_paths, 30, 380);
+  FourierSpectrum::binningAnalysis(image_paths, 30, 40);
   return 0;
 }
