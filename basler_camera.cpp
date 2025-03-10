@@ -4,6 +4,9 @@
 using namespace Pylon;
 // Include the necessary parameter headers
 #include <pylon/ParameterIncludes.h>
+#include <pylon/NodeMapProxy.h>
+
+
 
 BaslerCamera::BaslerCamera(size_t bufferSize)
     : maxBufferSize(bufferSize)
@@ -61,7 +64,7 @@ bool BaslerCamera::configureCamera(double frameRate) {
     
     try {
         // Get the camera's node map
-        INodeMap& nodemap = camera.GetNodeMap();
+         GenApi::INodeMap& nodemap = camera.GetNodeMap();
         
         // Configure frame rate
         GenApi::CBooleanPtr frameRateEnable = nodemap.GetNode("AcquisitionFrameRateEnable");
@@ -188,7 +191,7 @@ void BaslerCamera::setExposureTime(double microseconds) {
     if (connected) {
         try {
             // Get the camera's node map
-            INodeMap& nodemap = camera.GetNodeMap();
+             GenApi::INodeMap& nodemap = camera.GetNodeMap();
             
             // Set exposure time using GenAPI directly
             GenApi::CFloatPtr exposureTime = nodemap.GetNode("ExposureTimeAbs");
@@ -206,7 +209,7 @@ void BaslerCamera::setGain(double gain) {
     if (connected) {
         try {
             // Get the camera's node map
-            INodeMap& nodemap = camera.GetNodeMap();
+             GenApi::INodeMap& nodemap = camera.GetNodeMap();
             
             // Set gain using GenAPI directly
             GenApi::CIntegerPtr gainNode = nodemap.GetNode("GainRaw");
@@ -225,7 +228,7 @@ double BaslerCamera::getExposureTime() const {
         try {
             // Using const_cast because GetNodeMap() is not const in the API
             // This is a common issue with many C++ APIs
-            INodeMap& nodemap = const_cast<CInstantCamera&>(camera).GetNodeMap();
+             GenApi::INodeMap& nodemap = const_cast<CInstantCamera&>(camera).GetNodeMap();
             
             // Get exposure time using GenAPI directly
             GenApi::CFloatPtr exposureTime = nodemap.GetNode("ExposureTimeAbs");
@@ -244,7 +247,7 @@ double BaslerCamera::getGain() const {
     if (connected) {
         try {
             // Using const_cast because GetNodeMap() is not const in the API
-            INodeMap& nodemap = const_cast<CInstantCamera&>(camera).GetNodeMap();
+             GenApi::INodeMap& nodemap = const_cast<CInstantCamera&>(camera).GetNodeMap();
             
             // Get gain using GenAPI directly
             GenApi::CIntegerPtr gainNode = nodemap.GetNode("GainRaw");
