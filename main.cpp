@@ -6,13 +6,16 @@
 #include <thread>
 #include <sstream>
 #include <filesystem>
-#include <fstream>
 #include <opencv2/opencv.hpp>
+#include <csignal>
+#include <fstream>
 
 namespace fs = std::filesystem;
 
+std::vector<double> broadnessValues;
+std::vector<cv::Mat> images;
+
 void saveData(const std::vector<double>& broadnessValues, const std::vector<cv::Mat>& images) {
-    // Create a timestamped folder
     auto now = std::chrono::system_clock::now();
     auto time = std::chrono::system_clock::to_time_t(now);
     std::ostringstream folderName;
@@ -20,13 +23,11 @@ void saveData(const std::vector<double>& broadnessValues, const std::vector<cv::
 
     fs::create_directories(folderName.str());
 
-    // Save broadness values
     std::ofstream broadnessFile(folderName.str() + "/broadness_values.txt");
     for (double value : broadnessValues) {
         broadnessFile << value << "\n";
     }
 
-    // Save images
     for (size_t i = 0; i < images.size(); ++i) {
         std::ostringstream imageName;
         imageName << folderName.str() << "/image_" << i << ".png";
@@ -34,9 +35,16 @@ void saveData(const std::vector<double>& broadnessValues, const std::vector<cv::
     }
 }
 
-int main() {
-    BaslerCamera camera(10);  // Buffer 10 images
+void signalHandler(int signal) {
+    std::cout << "\nInterrupt received, saving data..." << std::endl;
+    saveData(broadnessValues, images);
+    std::exit(0);
+}
 
+int main() {
+    std::signal(SIGINT, signalHandler);
+
+    BaslerCamera camera(10);
     if (!camera.connect()) {
         std::cerr << "Failed to connect to camera" << std::endl;
         return 1;
@@ -45,10 +53,8 @@ int main() {
     camera.setExposureTime(10000);  // 10ms exposure
     camera.startCapture();
 
-    std::vector<double> broadnessValues;
-    std::vector<cv::Mat> images;
-
     cv::Mat image;
+    
     int i = 0;
     while (true) {
         if (camera.getNextImage(image)) {
@@ -57,21 +63,22 @@ int main() {
             double broadness = FourierSpectrum::computeBroadness(spectrum, 371);
             std::cout << "Image broadness: " << broadness << std::endl;
 
-            // Add data to the queues
+            std::pair<std::vector<double>,int> smoothedDataAndIndicator;
+            if (i > 100){
+              smoothedDataAndIndicator = FourierSpectrum::calculateSmoothedDataAndIndicator(broadnessValues, 30, 2.0);
+              if(smoothedDataAndIndicator.second) {
+                std::cout << "Damage detected!" << std::endl;
+                saveData(broadnessValues, images);
+                std::exit(0);
+              }
+            }
             if (broadnessValues.size() >= 100) {
                 broadnessValues.erase(broadnessValues.begin());
                 images.erase(images.begin());
             }
             broadnessValues.push_back(broadness);
             images.push_back(image.clone());
-
             ++i;
-        }
-
-        // Exit condition
-        if (cv::waitKey(10) == 27) {  // Press 'Esc' key to exit
-            saveData(broadnessValues, images);
-            break;
         }
     }
 

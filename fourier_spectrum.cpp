@@ -2,6 +2,7 @@
 #include <fftw3.h>
 #include <iostream>
 #include <numeric>
+#include <algorithm>
 #include <omp.h>
 #include <cmath>
 #include <fstream>
@@ -303,3 +304,64 @@ void FourierSpectrum::binningAnalysis(const std::vector<std::string>& image_path
 
     std::cout << "Data written to ./data/binning_results.txt" << std::endl;
 }
+
+std::vector<double> FourierSpectrum::smoothData(const std::vector<double>& data, int windowSize) {
+  // Simple moving average for smoothing (adjust window size as needed)
+  std::vector<double> smoothedData(data.size(), 0.0);
+
+  for (size_t i = 0; i < data.size(); ++i) {
+      int start = std::max(static_cast<int>(i) - windowSize / 2, 0);
+      int end = std::min(static_cast<int>(i) + windowSize / 2, static_cast<int>(data.size() - 1));
+
+      double sum = 0.0;
+      for (int j = start; j <= end; ++j) {
+          sum += data[j];
+      }
+      smoothedData[i] = sum / (end - start + 1);
+  }
+
+  return smoothedData;
+}
+
+std::vector<double> FourierSpectrum::calculateDerivative(const std::vector<double>& data) {
+  std::vector<double> derivative(data.size(), 0.0);
+
+  for (size_t i = 1; i < data.size() - 1; ++i) {
+      derivative[i] = (data[i + 1] - data[i - 1]) / 2.0;
+  }
+
+  // Edge handling (forward and backward difference for boundaries)
+  if (data.size() > 1) {
+      derivative[0] = data[1] - data[0];
+      derivative[data.size() - 1] = data[data.size() - 1] - data[data.size() - 2];
+  }
+
+  return derivative;
+}
+
+std::pair<std::vector<double>,int> FourierSpectrum::calculateSmoothedDataAndIndicator(const std::vector<double>& data, int smoothingWindow, double thresholdSigma){
+  std::vector<double> smoothedData = smoothData(data, smoothingWindow);
+  std::vector<double> firstDerivative = calculateDerivative(smoothedData);
+  
+   // Calculate standard deviation of the first derivative
+   double mean = std::accumulate(firstDerivative.begin(), firstDerivative.end(), 0.0) / firstDerivative.size();
+   double variance = std::accumulate(firstDerivative.begin(), firstDerivative.end(), 0.0, 
+       [mean](double sum, double val) { return sum + (val - mean) * (val - mean); }) / firstDerivative.size();
+   double stdDev = std::sqrt(variance);
+
+   // Threshold and indicator calculation
+   double firstDerivThreshold = stdDev * thresholdSigma;
+   int indicator = 0;
+   for (size_t i = 0; i < firstDerivative.size(); ++i) {
+       if (std::abs(firstDerivative[i]) > firstDerivThreshold) {
+           indicator = 1;
+           break;
+       }
+   }
+   
+   return std::make_pair(smoothedData, indicator);
+}
+
+
+
+
