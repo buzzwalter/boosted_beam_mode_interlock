@@ -1,6 +1,9 @@
 // basler_camera.cpp
 #include "basler_camera.hpp"
-#include <iostream>
+
+using namespace Pylon;
+// Include the necessary parameter headers
+#include <pylon/ParameterIncludes.h>
 
 BaslerCamera::BaslerCamera(size_t bufferSize)
     : maxBufferSize(bufferSize)
@@ -8,22 +11,22 @@ BaslerCamera::BaslerCamera(size_t bufferSize)
     , capturing(false)
     , stopThread(false) {
     // Initialize Pylon runtime
-    Pylon::PylonInitialize();
+    PylonInitialize();
 }
 
 BaslerCamera::~BaslerCamera() {
     disconnect();
     // Terminate Pylon runtime
-    Pylon::PylonTerminate();
+    PylonTerminate();
 }
 
 bool BaslerCamera::connect() {
     try {
         // Get the transport layer factory
-        Pylon::CTlFactory& tlFactory = Pylon::CTlFactory::GetInstance();
+        CTlFactory& tlFactory = CTlFactory::GetInstance();
 
         // Get all attached devices and select first device
-        Pylon::DeviceInfoList_t devices;
+        DeviceInfoList_t devices;
         if (tlFactory.EnumerateDevices(devices) == 0) {
             std::cerr << "No camera found." << std::endl;
             return false;
@@ -39,7 +42,7 @@ bool BaslerCamera::connect() {
         connected = true;
         return true;
     }
-    catch (const Pylon::GenericException& e) {
+    catch (const GenericException& e) {
         std::cerr << "Camera connection failed: " << e.GetDescription() << std::endl;
         return false;
     }
@@ -53,6 +56,44 @@ void BaslerCamera::disconnect() {
     }
 }
 
+bool BaslerCamera::configureCamera(double frameRate) {
+    if (!connected) return false;
+    
+    try {
+        // Get the camera's node map
+        INodeMap& nodemap = camera.GetNodeMap();
+        
+        // Configure frame rate
+        GenApi::CBooleanPtr frameRateEnable = nodemap.GetNode("AcquisitionFrameRateEnable");
+        if (frameRateEnable && GenApi::IsWritable(frameRateEnable)) {
+            frameRateEnable->SetValue(true);
+        }
+        
+        GenApi::CFloatPtr frameRateNode = nodemap.GetNode("AcquisitionFrameRate");
+        if (frameRateNode && GenApi::IsWritable(frameRateNode)) {
+            frameRateNode->SetValue(frameRate);
+        }
+        
+        // Turn off auto-exposure for consistent images
+        GenApi::CEnumerationPtr exposureAuto = nodemap.GetNode("ExposureAuto");
+        if (exposureAuto && GenApi::IsWritable(exposureAuto)) {
+            exposureAuto->FromString("Off");
+        }
+        
+        // Set pixel format to Mono8 for 8-bit grayscale
+        GenApi::CEnumerationPtr pixelFormat = nodemap.GetNode("PixelFormat");
+        if (pixelFormat && GenApi::IsWritable(pixelFormat)) {
+            pixelFormat->FromString("Mono8");
+        }
+        
+        return true;
+    }
+    catch (const GenericException& e) {
+        std::cerr << "Failed to configure camera: " << e.GetDescription() << std::endl;
+        return false;
+    }
+}
+
 bool BaslerCamera::startCapture() {
     if (!connected || capturing) {
         return false;
@@ -60,7 +101,7 @@ bool BaslerCamera::startCapture() {
 
     try {
         // Start grabbing
-        camera.StartGrabbing(Pylon::GrabStrategy_LatestImageOnly);
+        camera.StartGrabbing(GrabStrategy_LatestImageOnly);
         
         // Start capture thread
         stopThread = false;
@@ -68,7 +109,7 @@ bool BaslerCamera::startCapture() {
         capturing = true;
         return true;
     }
-    catch (const Pylon::GenericException& e) {
+    catch (const GenericException& e) {
         std::cerr << "Failed to start capture: " << e.GetDescription() << std::endl;
         return false;
     }
@@ -88,12 +129,12 @@ void BaslerCamera::stopCapture() {
 }
 
 void BaslerCamera::captureLoop() {
-    Pylon::CGrabResultPtr grabResult;
+    CGrabResultPtr grabResult;
     
     while (!stopThread && camera.IsGrabbing()) {
         try {
             // Wait for an image and grab it
-            camera.RetrieveResult(5000, grabResult, Pylon::TimeoutHandling_ThrowException);
+            camera.RetrieveResult(5000, grabResult, TimeoutHandling_ThrowException);
             
             if (grabResult->GrabSucceeded()) {
                 // Convert to OpenCV Mat
@@ -110,11 +151,11 @@ void BaslerCamera::captureLoop() {
                 bufferCondition.notify_one();
             }
         }
-        catch (const Pylon::TimeoutException&) {
+        catch (const TimeoutException&) {
             // Timeout - continue
             continue;
         }
-        catch (const Pylon::GenericException& e) {
+        catch (const GenericException& e) {
             std::cerr << "Capture error: " << e.GetDescription() << std::endl;
             break;
         }
@@ -146,9 +187,16 @@ void BaslerCamera::clearBuffer() {
 void BaslerCamera::setExposureTime(double microseconds) {
     if (connected) {
         try {
-            camera.ExposureTime.SetValue(microseconds);
+            // Get the camera's node map
+            INodeMap& nodemap = camera.GetNodeMap();
+            
+            // Set exposure time using GenAPI directly
+            GenApi::CFloatPtr exposureTime = nodemap.GetNode("ExposureTimeAbs");
+            if (exposureTime && GenApi::IsWritable(exposureTime)) {
+                exposureTime->SetValue(microseconds);
+            }
         }
-        catch (const Pylon::GenericException& e) {
+        catch (const GenericException& e) {
             std::cerr << "Failed to set exposure time: " << e.GetDescription() << std::endl;
         }
     }
@@ -157,20 +205,58 @@ void BaslerCamera::setExposureTime(double microseconds) {
 void BaslerCamera::setGain(double gain) {
     if (connected) {
         try {
-            camera.Gain.SetValue(gain);
+            // Get the camera's node map
+            INodeMap& nodemap = camera.GetNodeMap();
+            
+            // Set gain using GenAPI directly
+            GenApi::CIntegerPtr gainNode = nodemap.GetNode("GainRaw");
+            if (gainNode && GenApi::IsWritable(gainNode)) {
+                gainNode->SetValue(static_cast<int>(gain));
+            }
         }
-        catch (const Pylon::GenericException& e) {
+        catch (const GenericException& e) {
             std::cerr << "Failed to set gain: " << e.GetDescription() << std::endl;
         }
     }
 }
 
 double BaslerCamera::getExposureTime() const {
-    return connected ? camera.ExposureTime.GetValue() : 0.0;
+    if (connected) {
+        try {
+            // Using const_cast because GetNodeMap() is not const in the API
+            // This is a common issue with many C++ APIs
+            INodeMap& nodemap = const_cast<CInstantCamera&>(camera).GetNodeMap();
+            
+            // Get exposure time using GenAPI directly
+            GenApi::CFloatPtr exposureTime = nodemap.GetNode("ExposureTimeAbs");
+            if (exposureTime && GenApi::IsReadable(exposureTime)) {
+                return exposureTime->GetValue();
+            }
+        }
+        catch (const GenericException& e) {
+            std::cerr << "Failed to get exposure time: " << e.GetDescription() << std::endl;
+        }
+    }
+    return 0.0;
 }
 
 double BaslerCamera::getGain() const {
-    return connected ? camera.Gain.GetValue() : 0.0;
+    if (connected) {
+        try {
+            // Using const_cast because GetNodeMap() is not const in the API
+            INodeMap& nodemap = const_cast<CInstantCamera&>(camera).GetNodeMap();
+            
+            // Get gain using GenAPI directly
+            GenApi::CIntegerPtr gainNode = nodemap.GetNode("GainRaw");
+            if (gainNode && GenApi::IsReadable(gainNode)) {
+                return static_cast<double>(gainNode->GetValue());
+            }
+        }
+        catch (const GenericException& e) {
+            std::cerr << "Failed to get gain: " << e.GetDescription() << std::endl;
+        }
+    }
+    return 0.0;
 }
 
 size_t BaslerCamera::getBufferSize() const {
