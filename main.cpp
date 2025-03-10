@@ -5,83 +5,77 @@
 #include <chrono>
 #include <thread>
 #include <sstream>
-int main() {
-  BaslerCamera camera(10);  // Buffer 10 images
-  
-  if (!camera.connect()) {
-      std::cerr << "Failed to connect to camera" << std::endl;
-      return 1;
-  }
-  
-  camera.setExposureTime(10000);  // 10ms exposure
-  camera.startCapture();
-  
-  // Process images in a loop
-  cv::Mat image;
-  int i = 0;
-  while (true) {
-      if (camera.getNextImage(image)) {
-          std::cout << "Processing image " << i << std::endl;
-          cv::Mat spectrum = FourierSpectrum::computeSpectrum(image);
-          double broadness = FourierSpectrum::computeBroadness(spectrum, 371);
-          std::cout << "Image broadness: " << broadness << std::endl;
+#include <filesystem>
+#include <fstream>
+#include <opencv2/opencv.hpp>
 
-          // Do something with the results
-      }
-  }
-  
-  camera.stopCapture();
-  camera.disconnect();
-  return 0;
+namespace fs = std::filesystem;
+
+void saveData(const std::vector<double>& broadnessValues, const std::vector<cv::Mat>& images) {
+    // Create a timestamped folder
+    auto now = std::chrono::system_clock::now();
+    auto time = std::chrono::system_clock::to_time_t(now);
+    std::ostringstream folderName;
+    folderName << "./data/" << std::put_time(std::localtime(&time), "%Y-%m-%d_%H-%M-%S");
+
+    fs::create_directories(folderName.str());
+
+    // Save broadness values
+    std::ofstream broadnessFile(folderName.str() + "/broadness_values.txt");
+    for (double value : broadnessValues) {
+        broadnessFile << value << "\n";
+    }
+
+    // Save images
+    for (size_t i = 0; i < images.size(); ++i) {
+        std::ostringstream imageName;
+        imageName << folderName.str() << "/image_" << i << ".png";
+        cv::imwrite(imageName.str(), images[i]);
+    }
 }
 
-// #include "fourier_spectrum.hpp"
-// #include "basler_camera.hpp"
-// #include <iostream>
-// #include <vector>
-// #include <string>
+int main() {
+    BaslerCamera camera(10);  // Buffer 10 images
 
-// int main() {
-//     // Option 1: Use the BaslerCamera for live capture
-//     BaslerCamera camera(10);  // Buffer 10 images
-    
-//     if (camera.connect()) {
-//         std::cout << "Connected to camera" << std::endl;
-        
-//         // Configure camera with 30 fps frame rate
-//         if (camera.configureCamera(30.0)) {
-//             std::cout << "Camera configured successfully" << std::endl;
-//         }
-        
-//         camera.setExposureTime(10000);  // 10ms exposure
-        
-//         if (camera.startCapture()) {
-//             std::cout << "Started capture" << std::endl;
-            
-//             // Process a few frames
-//             for (int i = 0; i < 10; i++) {
-//                 cv::Mat image;
-//                 if (camera.getNextImage(image)) {
-//                     std::cout << "Processing image " << i << std::endl;
-//                     cv::Mat spectrum = FourierSpectrum::computeSpectrum(image);
-//                     double broadness = FourierSpectrum::computeBroadness(spectrum, 371);
-//                     std::cout << "Image broadness: " << broadness << std::endl;
-//                 }
-//             }
-            
-//             camera.stopCapture();
-//         }
-//         camera.disconnect();
-//     }
-    
-//     // Option 2: Process existing images from disk
-//     // std::vector<std::string> image_paths = {
-//     //     "./data/test_images/0009.tiff",
-//     //     "./data/test_images/0150.tiff",
-//     //     "./data/test_images/0260.tiff"
-//     // };
-    
-//     // FourierSpectrum::processImages(image_paths);
-    
-//     return 0;
-// }
+    if (!camera.connect()) {
+        std::cerr << "Failed to connect to camera" << std::endl;
+        return 1;
+    }
+
+    camera.setExposureTime(10000);  // 10ms exposure
+    camera.startCapture();
+
+    std::vector<double> broadnessValues;
+    std::vector<cv::Mat> images;
+
+    cv::Mat image;
+    int i = 0;
+    while (true) {
+        if (camera.getNextImage(image)) {
+            std::cout << "Processing image " << i << std::endl;
+            cv::Mat spectrum = FourierSpectrum::computeSpectrum(image);
+            double broadness = FourierSpectrum::computeBroadness(spectrum, 371);
+            std::cout << "Image broadness: " << broadness << std::endl;
+
+            // Add data to the queues
+            if (broadnessValues.size() >= 100) {
+                broadnessValues.erase(broadnessValues.begin());
+                images.erase(images.begin());
+            }
+            broadnessValues.push_back(broadness);
+            images.push_back(image.clone());
+
+            ++i;
+        }
+
+        // Exit condition
+        if (cv::waitKey(10) == 27) {  // Press 'Esc' key to exit
+            saveData(broadnessValues, images);
+            break;
+        }
+    }
+
+    camera.stopCapture();
+    camera.disconnect();
+    return 0;
+}
